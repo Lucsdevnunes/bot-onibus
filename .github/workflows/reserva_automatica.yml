@@ -1,0 +1,46 @@
+name: Executar Bot de Reserva Diariamente
+
+on:
+  schedule:
+    # 21:58:59 em Brasília (UTC-3) corresponde a 00:58 UTC
+    - cron: '58 0 * * *'
+  workflow_dispatch: # Permite disparar manualmente com 1 clique no GitHub
+
+jobs:
+  executar-reserva:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar codigo do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget curl unzip libxi6 libgconf-2-4 libnss3
+          wget -q -O google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y ./google-chrome.deb
+
+      - name: Instalar dependencias Python
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Executar Bot de Reserva (Modo Headless)
+        run: |
+          python main.py --agora --headless
+
+      - name: Salvar Logs e Screenshots como Artefato
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-e-screenshots
+          path: |
+            logs/
+            screenshots/
+          retention-days: 7
