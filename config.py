@@ -17,8 +17,8 @@ SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 # Arquivo de log
 LOG_FILE = LOGS_DIR / "bot.log"
 
-# URL do site de reservas (Produção / Nuvem)
-SITE_URL = os.getenv("SITE_URL", "https://reserva-universitaria-maurilandia.netlify.app/")
+# URL oficial do site de reservas
+SITE_URL = "https://reserva-universitaria-maurilandia.netlify.app/"
 
 # Fuso horário padrão do sistema e agendamento
 TIMEZONE_NAME = "America/Sao_Paulo"
