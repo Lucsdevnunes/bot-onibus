@@ -75,17 +75,23 @@ PASSAGEIROS = [
 ]
 
 # ==============================================================================
-# CALENDÁRIO DE EXECUÇÃO (TODOS OS DIAS ÀS 21:58:59)
+# CALENDÁRIO DE EXECUÇÃO
+# Segunda a Quinta: 21:58:59 | Sexta e Sábado: Folga | Domingo: 17:58:59
 # ==============================================================================
 HORARIOS_EXECUCAO = {
-    0: (21, 58, 59),  # Segunda-feira: 21:58:59
-    1: (21, 58, 59),  # Terça-feira:   21:58:59
-    2: (21, 58, 59),  # Quarta-feira:  21:58:59
-    3: (21, 58, 59),  # Quinta-feira:  21:58:59
-    4: (21, 58, 59),  # Sexta-feira:   21:58:59
-    5: (21, 58, 59),  # Sábado:        21:58:59
-    6: (21, 58, 59),  # Domingo:       21:58:59
+    0: (21, 58, 59),  # Segunda-feira: 21:58:59 (reserva terça)
+    1: (21, 58, 59),  # Terça-feira:   21:58:59 (reserva quarta)
+    2: (21, 58, 59),  # Quarta-feira:  21:58:59 (reserva quinta)
+    3: (21, 58, 59),  # Quinta-feira:  21:58:59 (reserva sexta)
+    4: None,          # Sexta-feira:   NÃO EXECUTAR (sábado sem aula)
+    5: None,          # Sábado:        NÃO EXECUTAR (domingo sem aula)
+    6: (17, 58, 59),  # Domingo:       17:58:59 (reserva segunda com refresh até abrir)
 }
+
+# ==============================================================================
+# HORÁRIO LIMITE DE ENCERRAMENTO (PARADA AUTOMÁTICA)
+# ==============================================================================
+HORARIO_LIMITE_ENCERRAMENTO = (22, 30)  # Encerra o programa automaticamente às 22:30
 
 # ==============================================================================
 # CONFIGURAÇÕES DO NAVEGADOR

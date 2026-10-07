@@ -45,14 +45,14 @@ def configurar_logger():
 
 def executar_tarefa_reserva(
     headless: bool = False, passageiros_concluidos: Optional[Set[str]] = None
-) -> Tuple[bool, Set[str], Optional[any]]:
+) -> Tuple[str, Set[str], Optional[any]]:
     """
     Executa uma rodada do processo para os passageiros pendentes.
-    Retorna (todos_sucesso, conjunto_concluidos, driver).
+    Retorna (status: str, conjunto_concluidos: Set[str], driver).
     """
     logger = logging.getLogger("BotReserva")
     driver = None
-    sucesso = False
+    status = "ERRO_TEMPORARIO"
     concluidos = set(passageiros_concluidos or set())
     inicio_execucao = datetime.now(TIMEZONE)
 
@@ -68,18 +68,19 @@ def executar_tarefa_reserva(
 
         driver = criar_driver(headless=headless)
         automacao = AutomacaoReserva(driver)
-        sucesso, concluidos = automacao.processar_lote_com_retomada(concluidos)
+        status, concluidos = automacao.processar_lote_com_retomada(concluidos)
 
     except Exception as e:
         logger.error(f"Erro durante a execução: {e}", exc_info=True)
         if driver:
             salvar_screenshot(driver, "erro_critico")
-        sucesso = False
+        status = "ERRO_TEMPORARIO"
     finally:
         manter_aberto = BROWSER_CONFIG.get("manter_aberto", False)
-        # Se deu sucesso completo e manter_aberto=True, NÃO fecha o navegador
+        deve_manter = status in ["SUCESSO_TOTAL", "SEM_VAGAS"]
+
         if driver:
-            if sucesso and manter_aberto and not headless:
+            if deve_manter and manter_aberto and not headless:
                 logger.info("Tela do navegador mantida aberta para sua conferência visual.")
             else:
                 try:
@@ -90,23 +91,47 @@ def executar_tarefa_reserva(
 
         fim_execucao = datetime.now(TIMEZONE)
         duracao = (fim_execucao - inicio_execucao).total_seconds()
-        status_str = "SUCESSO" if sucesso else "NÃO CONCLUÍDA / COM ERROS"
-        logger.info(f"Fim do processo. Status: {status_str} (Duração: {duracao:.1f}s)")
+        logger.info(f"Fim do processo. Status: {status} (Duração: {duracao:.1f}s)")
         logger.info("=" * 65 + "\n")
 
-    return sucesso, concluidos, driver
+    return status, concluidos, driver
+
+
+def atingiu_horario_limite() -> bool:
+    """
+    Verifica se o relógio atingiu o horário limite de encerramento (22:30 no fuso de SP).
+    Aos domingos, considera também 18:30 como limite de encerramento.
+    """
+    agora = datetime.now(TIMEZONE)
+    dia_semana = agora.weekday()
+
+    # Domingo: limite às 18:30
+    if dia_semana == 6:
+        if (agora.hour == 18 and agora.minute >= 30) or agora.hour > 18:
+            return True
+    # Segunda a Sexta: limite às 22:30
+    else:
+        if (agora.hour == 22 and agora.minute >= 30) or agora.hour > 22:
+            return True
+
+    return False
 
 
 def executar_em_loop(headless: bool = False, intervalo_segundos: float = 1.0):
     """
     Executa tentativas consecutivas em looping inteligente com memória de estado.
-    Se o aluno 1 der certo e o 2 falhar, a próxima tentativa recomeça do 2 em diante!
-    O looping só encerra quando TODOS os passageiros estiverem com Status: SUCESSO.
+    REGRAS DE OURO: O loop encerra em 3 ocasiões:
+      1. Todos os nomes da lista forem marcados/confirmados ("SUCESSO_TOTAL").
+      2. O ônibus 0542 estiver lotado e não houver mais vagas ("SEM_VAGAS").
+      3. O relógio marcar 22:30 ("HORARIO_LIMITE").
     """
     logger = logging.getLogger("BotReserva")
     logger.info("=" * 65)
-    logger.info(">>> MODO LOOPING INTELIGENTE ATIVADO (COM RETOMADA INCREMENTAL) <<<")
-    logger.info("O bot só vai parar quando TODOS os passageiros forem confirmados com SUCESSO!")
+    logger.info(">>> MODO LOOPING INTELIGENTE ATIVADO <<<")
+    logger.info("Ocasiões de Encerramento:")
+    logger.info("  1. Todos os alunos marcados com Sucesso")
+    logger.info("  2. Ônibus 0542 Lotado / Vagas esgotadas")
+    logger.info("  3. Horário limite atingido (22:30)")
     logger.info("=" * 65)
 
     passageiros_concluidos: Set[str] = set()
@@ -114,23 +139,53 @@ def executar_em_loop(headless: bool = False, intervalo_segundos: float = 1.0):
     tentativa = 1
 
     while True:
+        # Checagem pré-tentativa: Horário limite 22:30
+        if atingiu_horario_limite():
+            logger.info("=" * 65)
+            logger.info("⏰ [HORÁRIO LIMITE ATINGIDO] O relógio atingiu o horário limite (22:30).")
+            logger.info(f"Concluídos até o encerramento: {len(passageiros_concluidos)}/{total} passageiro(s).")
+            logger.info("O programa foi finalizado e a tela permanecerá aberta para conferência.")
+            logger.info("=" * 65)
+            break
+
         logger.info(f"\n>>>> TENTATIVA #{tentativa} (Progresso: {len(passageiros_concluidos)}/{total} concluídos) <<<<")
-        sucesso, passageiros_concluidos, driver = executar_tarefa_reserva(
+        status, passageiros_concluidos, driver = executar_tarefa_reserva(
             headless=headless, passageiros_concluidos=passageiros_concluidos
         )
 
-        if sucesso and len(passageiros_concluidos) == total:
+        # 1. Condição 1: Todos os nomes marcados
+        if status == "SUCESSO_TOTAL" or len(passageiros_concluidos) == total:
             logger.info("=" * 65)
             logger.info(f"🎉 SUCESSO TOTAL ATINGIDO NA TENTATIVA #{tentativa}!")
             logger.info(f"Todos os {total} passageiros foram reservados com êxito.")
-            logger.info("A tela permanecerá aberta no navegador para sua conferência.")
+            logger.info("O programa foi finalizado e a tela permanecerá aberta para conferência.")
             logger.info("=" * 65)
             break
+
+        # 2. Condição 2: Não tem mais vagas (Ônibus Lotado)
+        elif status == "SEM_VAGAS":
+            logger.info("=" * 65)
+            logger.info(f"🛑 [REGRA DE OURO] ENCERRAMENTO: NÃO HÁ MAIS VAGAS DISPONÍVEIS!")
+            logger.info(f"Concluídos até a lotação: {len(passageiros_concluidos)}/{total} passageiro(s).")
+            logger.info("O programa foi encerrado e a tela permanecerá aberta para conferência.")
+            logger.info("=" * 65)
+            break
+
+        # 3. Condição 3: Horário limite 22:30 após a tentativa
+        elif atingiu_horario_limite():
+            logger.info("=" * 65)
+            logger.info("⏰ [HORÁRIO LIMITE ATINGIDO] O relógio atingiu o horário limite (22:30).")
+            logger.info(f"Concluídos até o encerramento: {len(passageiros_concluidos)}/{total} passageiro(s).")
+            logger.info("O programa foi finalizado e a tela permanecerá aberta para conferência.")
+            logger.info("=" * 65)
+            break
+
+        # Tentativa falhou por erro temporário: tenta novamente
         else:
             faltam = total - len(passageiros_concluidos)
             logger.warning(
-                f"Tentativa #{tentativa} finalizada. Concluídos: {len(passageiros_concluidos)}/{total}. "
-                f"Faltam {faltam} passageiro(s). Retomando em {intervalo_segundos}s a partir dos pendentes..."
+                f"Tentativa #{tentativa} com pendências ({len(passageiros_concluidos)}/{total} concluídos). "
+                f"Retomando em {intervalo_segundos}s a partir dos passageiros pendentes..."
             )
             tentativa += 1
             time.sleep(intervalo_segundos)

@@ -149,9 +149,10 @@ class AutomacaoReserva:
                 logger.warning(f"Aguardando resposta do servidor: {e}")
                 time.sleep(0.5)
 
-    def selecionar_onibus(self, numero_alvo: str, motorista_alvo: str) -> bool:
+    def selecionar_onibus(self, numero_alvo: str, motorista_alvo: str) -> Tuple[bool, str]:
         """
         Localiza e seleciona especificamente o ônibus 0542.
+        Retorna (sucesso: bool, motivo: str).
         """
         try:
             self.wait.until(
@@ -170,23 +171,23 @@ class AutomacaoReserva:
             if not onibus_alvo:
                 logger.error(f"Ônibus {numero_alvo} não encontrado.")
                 salvar_screenshot(self.driver, "erro_onibus_nao_encontrado")
-                return False
+                return False, "NAO_ENCONTRADO"
 
             classes = onibus_alvo.get_attribute("class") or ""
             texto = onibus_alvo.text
 
             if "full" in classes or "LOTADO" in texto.upper():
-                logger.error(f"Ônibus {numero_alvo} está LOTADO.")
+                logger.warning(f"⚠️ O Ônibus {numero_alvo} está completamente LOTADO (0 vagas disponíveis).")
                 salvar_screenshot(self.driver, "erro_onibus_lotado")
-                return False
+                return False, "LOTADO"
 
             # Clica no ônibus para exibir o mapa de poltronas
             self.driver.execute_script("arguments[0].click();", onibus_alvo)
-            return True
+            return True, "OK"
         except Exception as e:
             logger.error(f"Falha ao selecionar ônibus {numero_alvo}: {e}")
             salvar_screenshot(self.driver, "erro_selecao_onibus")
-            return False
+            return False, str(e)
 
     def selecionar_poltrona(
         self,
@@ -406,10 +407,13 @@ class AutomacaoReserva:
 
     def processar_lote_com_retomada(
         self, passageiros_concluidos: Set[str]
-    ) -> Tuple[bool, Set[str]]:
+    ) -> Tuple[str, Set[str]]:
         """
         Executa a reserva somente para os passageiros PENDENTES da lista PASSAGEIROS.
-        Se o site ainda estiver fechado, aguarda e recarrega em loop até a abertura oficial!
+        Retorna:
+          - "SUCESSO_TOTAL": todos os passageiros da lista foram alocados e confirmados.
+          - "SEM_VAGAS": o ônibus 0542 está lotado ou acabaram as vagas disponíveis.
+          - "ERRO_TEMPORARIO": erro momentâneo para nova tentativa no loop.
         """
         data_br, data_iso, _ = self.calcular_data_viagem()
         total = len(PASSAGEIROS)
@@ -417,11 +421,11 @@ class AutomacaoReserva:
 
         # 1. Abre a interface inicial
         if not self.abrir_site():
-            return False, concluidos
+            return "ERRO_TEMPORARIO", concluidos
 
         # 2. Espera ativa com refresh até as vagas abrirem
         if not self.aguardar_e_recarregar_ate_abertura(data_br, data_iso):
-            return False, concluidos
+            return "ERRO_TEMPORARIO", concluidos
 
         poltronas_reservadas_nesta_sessao: List[int] = []
 
@@ -437,9 +441,13 @@ class AutomacaoReserva:
             logger.info(f"\n[{i}/{total}] Processando passageiro pendente: '{nome}' (Denominada: {poltrona_pref})...")
 
             # Seleciona o ônibus 0542
-            if not self.selecionar_onibus(ONIBUS_CONFIG["numero"], ONIBUS_CONFIG["motorista"]):
+            onibus_ok, motivo_onibus = self.selecionar_onibus(ONIBUS_CONFIG["numero"], ONIBUS_CONFIG["motorista"])
+            if not onibus_ok:
+                if motivo_onibus == "LOTADO":
+                    logger.warning("🛑 [REGRA DE OURO] O ônibus 0542 está completamente LOTADO. Sem mais vagas.")
+                    return "SEM_VAGAS", concluidos
                 logger.error(f"Falha ao selecionar ônibus para '{nome}'.")
-                return False, concluidos
+                return "ERRO_TEMPORARIO", concluidos
 
             # Aloca a poltrona (denominada ou mais próxima disponível)
             poltrona_ok, status_p, poltrona_escolhida = self.selecionar_poltrona(
@@ -447,8 +455,11 @@ class AutomacaoReserva:
             )
 
             if not poltrona_ok:
+                if status_p in ["SEM_VAGAS", "TODAS_OCUPADAS"]:
+                    logger.warning("🛑 [REGRA DE OURO] Não existem mais poltronas disponíveis no ônibus 0542.")
+                    return "SEM_VAGAS", concluidos
                 logger.error(f"Não foi possível alocar poltrona para '{nome}'.")
-                return False, concluidos
+                return "ERRO_TEMPORARIO", concluidos
 
             if status_p == "JA_RESERVADO":
                 concluidos.add(nome)
@@ -458,11 +469,11 @@ class AutomacaoReserva:
 
             # Preenche o formulário
             if not self.preencher_dados_estudante(passageiro):
-                return False, concluidos
+                return "ERRO_TEMPORARIO", concluidos
 
             # Confere antes de clicar
             if not self.conferir_dados_antes_confirmar(data_br, poltrona_escolhida, passageiro):
-                return False, concluidos
+                return "ERRO_TEMPORARIO", concluidos
 
             # Confirma a reserva
             sucesso, codigo, _ = self.confirmar_reserva()
@@ -472,7 +483,7 @@ class AutomacaoReserva:
                 logger.info(f"Passageiro {i} ('{nome}') RESERVADO com êxito na poltrona {poltrona_escolhida}!")
             else:
                 logger.error(f"Falha ao confirmar reserva para '{nome}'.")
-                return False, concluidos
+                return "ERRO_TEMPORARIO", concluidos
 
             # Se ainda houver passageiros pendentes para cadastrar, dá refresh para atualizar o mapa de poltronas e nomes
             if len(concluidos) < total and i < total:
@@ -483,12 +494,13 @@ class AutomacaoReserva:
                 self.wait.until(EC.presence_of_element_located((By.ID, "bus-list")))
                 self.preencher_data(data_br, data_iso)
 
-        todos_sucesso = len(concluidos) == total
-        return todos_sucesso, concluidos
+        if len(concluidos) == total:
+            return "SUCESSO_TOTAL", concluidos
+        return "ERRO_TEMPORARIO", concluidos
 
     def executar_fluxo_completo(self) -> bool:
         """
         Execução direta do lote inteiro do zero.
         """
-        sucesso, _ = self.processar_lote_com_retomada(set())
-        return sucesso
+        status, _ = self.processar_lote_com_retomada(set())
+        return status == "SUCESSO_TOTAL"
