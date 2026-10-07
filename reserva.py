@@ -474,8 +474,14 @@ class AutomacaoReserva:
                 logger.error(f"Falha ao confirmar reserva para '{nome}'.")
                 return False, concluidos
 
-            # Breve pausa para o DOM atualizar antes do próximo
-            time.sleep(0.3)
+            # Se ainda houver passageiros pendentes para cadastrar, dá refresh para atualizar o mapa de poltronas e nomes
+            if len(concluidos) < total and i < total:
+                logger.info("Atualizando site com refresh para recarregar o mapa de poltronas e nomes em tempo real...")
+                time.sleep(0.3)
+                self.driver.refresh()
+                self.wait.until(EC.presence_of_element_located((By.ID, "date")))
+                self.wait.until(EC.presence_of_element_located((By.ID, "bus-list")))
+                self.preencher_data(data_br, data_iso)
 
         todos_sucesso = len(concluidos) == total
         return todos_sucesso, concluidos
