@@ -31,9 +31,9 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Executar Bot de Reserva (Modo Headless)
+      - name: Executar Bot de Reserva (Modo Looping Inteligente com Refresh)
         run: |
-          python main.py --agora --headless
+          python main.py --loop --headless
 
       - name: Salvar Logs e Screenshots como Artefato
         if: always()
