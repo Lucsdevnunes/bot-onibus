@@ -72,6 +72,18 @@ PASSAGEIROS = [
         "instituicao": "UNIRV",
         "poltrona_preferencial": 42,
     },
+    {
+        "nome": "Gabriele Santos",
+        "curso": "Enfermagem",
+        "instituicao": "UNIRV",
+        "poltrona_preferencial": 46,
+    },
+    {
+        "nome": "Gabriel Santos Correia",
+        "curso": "Agronomia",
+        "instituicao": "UNIRV",
+        "poltrona_preferencial": 25,
+    },
 ]
 
 # ==============================================================================
