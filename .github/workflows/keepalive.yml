@@ -1,0 +1,27 @@
+name: Manter Bot Ativo (Keep Alive)
+
+on:
+  schedule:
+    # Executa toda segunda-feira à meia-noite UTC para manter o repositório acordado
+    - cron: '0 0 * * 1'
+  workflow_dispatch: # Permite rodar manualmente a qualquer momento
+
+jobs:
+  keepalive:
+    name: Manter Workflows Ativos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
+      - name: Evitar suspensão do GitHub Actions por inatividade
+        uses: gautamkrishnar/keepalive-workflow@v2
+        with:
+          time_elapsed: '20' # Se ficar mais de 20 dias sem alteração, faz um commit automático leve
+          commit_message: 'chore: manter workflows e agendamentos ativos (keepalive)'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
