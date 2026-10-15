@@ -66,7 +66,8 @@ def executar_tarefa_reserva(
         )
         logger.info("=" * 65)
 
-        driver = criar_driver(headless=headless)
+        # Se headless (ex: GitHub Actions), opera 100% via API direta sem peso de navegador
+        driver = None if headless else criar_driver(headless=False)
         automacao = AutomacaoReserva(driver)
         status, concluidos = automacao.processar_lote_com_retomada(concluidos)
 
