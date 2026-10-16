@@ -115,3 +115,15 @@ BROWSER_CONFIG = {
     "espera_entre_tentativas": 2, # Segundos entre tentativas
     "manter_aberto": True,        # Mantém a janela aberta após a reserva para conferência visual
 }
+
+# ==============================================================================
+# CONFIGURAÇÃO DE NOTIFICAÇÃO NO WHATSAPP (GREEN-API)
+# ==============================================================================
+WHATSAPP_CONFIG = {
+    "ativado": True,
+    "api_url": "https://7107.api.greenapi.com",
+    "id_instance": "710722769265",
+    "api_token": "16658ac22d1a4f6b801a81e218bb4381180874356e404073b9",
+    "chat_id": "120363412053809677@g.us",  # Grupo: "Sukita ou Makita 🤔"
+}
+

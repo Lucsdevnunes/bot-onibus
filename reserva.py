@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Tuple
 
 from config import BROWSER_CONFIG, ONIBUS_CONFIG, PASSAGEIROS, SITE_URL, TIMEZONE
+from notificacao_whatsapp import enviar_mensagem_whatsapp_grupo
 
 logger = logging.getLogger("BotReserva")
 
@@ -334,6 +335,30 @@ class AutomacaoReserva:
             status_txt = "✅ CONFIRMADO" if nm in concluidos else "❌ PENDENTE"
             logger.info(f" {i}. {nm} | Poltrona: {polt} | Cód: {cod} | Status: {status_txt}")
         logger.info("=" * 65 + "\n")
+
+        # Dispara notificação oficial no grupo do WhatsApp
+        try:
+            dias_semana_nomes = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+            dia_sem_str = dias_semana_nomes[datetime.strptime(data_iso, "%Y-%m-%d").weekday()]
+            lista_wpp = []
+            for p in PASSAGEIROS:
+                nm = p["nome"]
+                info = resultados_finais.get(nm, {})
+                lista_wpp.append({
+                    "nome": nm,
+                    "sucesso": nm in concluidos,
+                    "poltrona": info.get("poltrona", "N/A"),
+                    "codigo": info.get("codigo", "N/A"),
+                })
+            tempo_msg = tempo_paralelo if "tempo_paralelo" in locals() else 1.2
+            enviar_mensagem_whatsapp_grupo(
+                data_br=data_br,
+                dia_semana_str=dia_sem_str,
+                resultados=lista_wpp,
+                tempo_execucao=tempo_msg,
+            )
+        except Exception as e_wpp:
+            logger.error(f"Erro ao disparar mensagem no WhatsApp: {e_wpp}")
 
         # 5. Se o driver estiver ativo (execução no PC com interface), mostra a página final
         if self.driver:
