@@ -1,10 +1,7 @@
 name: Executar Bot de Reserva Diariamente
 
 on:
-  schedule:
-    # 21:58:59 em Brasília (UTC-3) corresponde a 00:58 UTC
-    - cron: '58 0 * * *'
-  workflow_dispatch: # Permite disparar manualmente com 1 clique no GitHub
+  workflow_dispatch: # Disparo seguro controlado via cron-job.org / Webhook ou Manual
 
 jobs:
   executar-reserva:

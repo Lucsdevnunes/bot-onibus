@@ -12,8 +12,14 @@ import urllib.request
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Tuple
 
-from config import BROWSER_CONFIG, ONIBUS_CONFIG, PASSAGEIROS, SITE_URL, TIMEZONE
-from notificacao_whatsapp import enviar_mensagem_whatsapp_grupo
+from config import (
+    BROWSER_CONFIG,
+    ONIBUS_CONFIG,
+    PASSAGEIROS,
+    SITE_URL,
+    TIMEZONE,
+    atingiu_horario_limite,
+)
 
 logger = logging.getLogger("BotReserva")
 
@@ -101,7 +107,9 @@ class AutomacaoReserva:
                 ordem.append(p)
         return ordem
 
-    def aguardar_abertura_vagas(self, primeiro_passageiro: Dict[str, any], data_iso: str) -> Tuple[bool, Optional[str]]:
+    def aguardar_abertura_vagas(
+        self, primeiro_passageiro: Dict[str, any], data_iso: str, max_tentativas: int = 1200
+    ) -> Tuple[bool, Optional[str]]:
         """
         Espera ativa ultra-rápida (polling a cada 0.25s).
         Verifica se o sistema liberou as vagas para a data alvo.
@@ -109,13 +117,17 @@ class AutomacaoReserva:
         logger.info("=" * 65)
         logger.info("Sincronizando com o sistema oficial de transporte de Maurilândia...")
         logger.info(f"Data Alvo: {data_iso} | Ônibus: 0542 (Dheimes)")
-        logger.info("Aguardando liberação das vagas pelo sistema...")
+        logger.info("Aguardando liberação oficial das vagas pelo sistema...")
         logger.info("=" * 65)
 
         poltrona_pref = primeiro_passageiro.get("poltrona_preferencial", 47)
         tentativa = 1
 
-        while True:
+        while tentativa <= max_tentativas:
+            if atingiu_horario_limite():
+                logger.warning("⏰ [HORÁRIO LIMITE] Limite de horário atingido durante a espera.")
+                return False, None
+
             payload = {
                 "p_data": data_iso,
                 "p_nome": primeiro_passageiro["nome"],
@@ -126,35 +138,38 @@ class AutomacaoReserva:
                 "p_tipo_transporte": "onibus",
             }
 
-            sucesso, res = chamar_rpc("fazer_reserva_com_cota_unirv", payload)
+            sucesso_rpc, res = chamar_rpc("fazer_reserva_com_cota_unirv", payload)
 
-            if sucesso and isinstance(res, dict):
+            if sucesso_rpc and isinstance(res, dict):
                 msg = (res.get("mensagem") or "").lower()
                 reserva_ok = res.get("sucesso", False)
                 codigo = res.get("codigo_reserva")
 
                 if reserva_ok or codigo:
                     logger.info("=" * 65)
-                    logger.info("🎉 [SISTEMA LIBERADO!] Portas abertas para reservas!")
+                    logger.info(f"🎉 [SISTEMA LIBERADO!] Portas abertas! Primeira reserva garantida: Cód {codigo}")
                     logger.info("=" * 65)
                     return True, codigo
 
                 if "já possui uma reserva" in msg:
-                    logger.info("🎉 [SISTEMA LIBERADO!] Sistema aberto (aluno já cadastrado).")
+                    logger.info("=" * 65)
+                    logger.info("🎉 [SISTEMA LIBERADO!] Portas abertas (aluno já cadastrado).")
+                    logger.info("=" * 65)
                     return True, None
 
-                if "encerradas" in msg or "fechadas" in msg or "não está aberta" in msg or "liberada às" in msg:
-                    if tentativa % 12 == 1:
-                        logger.info(f"[🔒 AGUARDANDO LIBERAÇÃO] {res.get('mensagem')}")
-                    time.sleep(0.25)
-                    tentativa += 1
-                    continue
+                # Se retornou sucesso=False e não tem código, o sistema ainda está fechado
+                if tentativa % 12 == 1:
+                    logger.info(f"[🔒 AGUARDANDO LIBERAÇÃO #{tentativa}] {res.get('mensagem')}")
 
-                logger.info("🎉 [SISTEMA LIBERADO!] Portas abertas.")
-                return True, None
+            else:
+                if tentativa % 12 == 1:
+                    logger.warning(f"[Tentativa #{tentativa}] Resposta inesperada do servidor: {res}")
 
             time.sleep(0.25)
             tentativa += 1
+
+        logger.error("Tempo máximo de espera atingido sem liberação do sistema.")
+        return False, None
 
     def reservar_passageiro_individual(
         self, passageiro: Dict[str, any], data_iso: str, ocupadas_iniciais: Set[int]
@@ -231,22 +246,42 @@ class AutomacaoReserva:
 
     def processar_lote_com_retomada(
         self, passageiros_concluidos: Set[str]
-    ) -> Tuple[str, Set[str]]:
+    ) -> Tuple[str, Set[str], List[Dict[str, any]], float, str, str, str]:
         """
         Executa as reservas dos alunos em PARALELO simultâneo (Multithreading).
         Todas as requisições são disparadas no mesmo milissegundo.
+        Retorna (status, concluidos, lista_resultados, tempo_paralelo, data_br, data_iso, dia_sem_str).
         """
-        data_br, data_iso, _ = self.calcular_data_viagem()
+        data_br, data_iso, amanha = self.calcular_data_viagem()
+        dia_sem_num = amanha.weekday()
+        dias_semana_nomes = [
+            "Segunda-feira", "Terça-feira", "Quarta-feira",
+            "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"
+        ]
+        dia_sem_str = dias_semana_nomes[dia_sem_num]
         total = len(PASSAGEIROS)
         concluidos = set(passageiros_concluidos)
         resultados_finais: Dict[str, Dict[str, any]] = {}
 
-        # 1. Espera ativa até a liberação dos assentos
+        # 0. BLOQUEIO DE SEGURANÇA: FIM DE SEMANA / FOLGA
+        # Não há circulação de transporte universitário aos sábados e domingos.
+        # Sexta-feira -> próxima viagem seria sábado (Folga)
+        # Sábado -> próxima viagem seria domingo (Folga)
+        # Domingo -> próxima viagem é segunda-feira (Válido! Disparo às 17:59)
+        if dia_sem_num in (5, 6):
+            logger.info("=" * 65)
+            logger.info(f"ℹ️ [FOLGA DE FIM DE SEMANA] Data alvo calculada: {data_br} ({dia_sem_str}).")
+            logger.info("Não há viagens ou reservas de transporte universitário para fins de semana.")
+            logger.info("O bot entrará em repouso e será executado no domingo às 17:59 para segunda-feira.")
+            logger.info("=" * 65)
+            return "FOLGA", concluidos, [], 0.0, data_br, data_iso, dia_sem_str
+
+        # 1. Espera ativa até a liberação oficial dos assentos
         primeiro = PASSAGEIROS[0]
         if primeiro["nome"] not in concluidos:
             aberto, cod_p1 = self.aguardar_abertura_vagas(primeiro, data_iso)
             if not aberto:
-                return "ERRO_TEMPORARIO", concluidos
+                return "ERRO_TEMPORARIO", concluidos, [], 0.0, data_br, data_iso, dia_sem_str
 
             if cod_p1:
                 concluidos.add(primeiro["nome"])
@@ -287,6 +322,7 @@ class AutomacaoReserva:
                 passageiros_para_disparar.append(p)
 
         # 3. DISPARO SIMULTÂNEO (PARALELO) PARA TODOS OS ALUNOS PENDENTES
+        tempo_paralelo = 0.0
         if passageiros_para_disparar:
             qtd = len(passageiros_para_disparar)
             logger.info("=" * 65)
@@ -327,38 +363,22 @@ class AutomacaoReserva:
         logger.info("\n" + "=" * 65)
         logger.info("          TABELA OFICIAL DE RESERVAS CONFIRMADAS")
         logger.info("=" * 65)
+        lista_resultados = []
         for i, p in enumerate(PASSAGEIROS, start=1):
             nm = p["nome"]
             info = resultados_finais.get(nm, {})
             polt = info.get("poltrona", "N/A")
             cod = info.get("codigo", "N/A")
-            status_txt = "✅ CONFIRMADO" if nm in concluidos else "❌ PENDENTE"
+            sucesso_aluno = nm in concluidos
+            status_txt = "✅ CONFIRMADO" if sucesso_aluno else "❌ PENDENTE"
             logger.info(f" {i}. {nm} | Poltrona: {polt} | Cód: {cod} | Status: {status_txt}")
+            lista_resultados.append({
+                "nome": nm,
+                "sucesso": sucesso_aluno,
+                "poltrona": polt,
+                "codigo": cod,
+            })
         logger.info("=" * 65 + "\n")
-
-        # Dispara notificação oficial no grupo do WhatsApp
-        try:
-            dias_semana_nomes = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-            dia_sem_str = dias_semana_nomes[datetime.strptime(data_iso, "%Y-%m-%d").weekday()]
-            lista_wpp = []
-            for p in PASSAGEIROS:
-                nm = p["nome"]
-                info = resultados_finais.get(nm, {})
-                lista_wpp.append({
-                    "nome": nm,
-                    "sucesso": nm in concluidos,
-                    "poltrona": info.get("poltrona", "N/A"),
-                    "codigo": info.get("codigo", "N/A"),
-                })
-            tempo_msg = tempo_paralelo if "tempo_paralelo" in locals() else 1.2
-            enviar_mensagem_whatsapp_grupo(
-                data_br=data_br,
-                dia_semana_str=dia_sem_str,
-                resultados=lista_wpp,
-                tempo_execucao=tempo_msg,
-            )
-        except Exception as e_wpp:
-            logger.error(f"Erro ao disparar mensagem no WhatsApp: {e_wpp}")
 
         # 5. Se o driver estiver ativo (execução no PC com interface), mostra a página final
         if self.driver:
@@ -388,6 +408,6 @@ class AutomacaoReserva:
             except Exception as e:
                 logger.warning(f"Não foi possível renderizar a tela visual: {e}")
 
-        if len(concluidos) == total:
-            return "SUCESSO_TOTAL", concluidos
-        return "ERRO_TEMPORARIO", concluidos
+        tempo_duracao = tempo_paralelo if tempo_paralelo > 0 else 1.1
+        status = "SUCESSO_TOTAL" if len(concluidos) == total else "ERRO_TEMPORARIO"
+        return status, concluidos, lista_resultados, tempo_duracao, data_br, data_iso, dia_sem_str

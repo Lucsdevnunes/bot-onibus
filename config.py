@@ -2,6 +2,7 @@
 # CONFIGURAÇÕES DO BOT DE RESERVA UNIVERSITÁRIA
 # ==============================================================================
 import os
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -104,6 +105,27 @@ HORARIOS_EXECUCAO = {
 # HORÁRIO LIMITE DE ENCERRAMENTO (PARADA AUTOMÁTICA)
 # ==============================================================================
 HORARIO_LIMITE_ENCERRAMENTO = (22, 30)  # Encerra o programa automaticamente às 22:30
+
+
+def atingiu_horario_limite() -> bool:
+    """
+    Verifica se o relógio atingiu o horário limite de encerramento (no fuso de SP).
+    - Domingos: limite às 18:30
+    - Segunda a Sexta: limite às 22:30
+    """
+    agora = datetime.now(TIMEZONE)
+    dia_semana = agora.weekday()
+
+    # Domingo: limite às 18:30
+    if dia_semana == 6:
+        if (agora.hour == 18 and agora.minute >= 30) or agora.hour > 18:
+            return True
+    # Segunda a Sexta: limite às 22:30
+    else:
+        if (agora.hour == 22 and agora.minute >= 30) or agora.hour > 22:
+            return True
+
+    return False
 
 # ==============================================================================
 # CONFIGURAÇÕES DO NAVEGADOR
