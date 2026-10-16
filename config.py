@@ -125,5 +125,9 @@ WHATSAPP_CONFIG = {
     "id_instance": "710722769265",
     "api_token": "16658ac22d1a4f6b801a81e218bb4381180874356e404073b9",
     "chat_id": "120363412053809677@g.us",  # Grupo: "Sukita ou Makita 🤔"
+    "ocultar_do_grupo": [
+        "Gabriele Santos",
+        "Gabriel Santos Correia",
+    ],
 }
 

@@ -36,7 +36,18 @@ def formatar_mensagem_grupo(
 
     emojis_numeros = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
 
-    for i, res in enumerate(resultados):
+    # Filtra alunos que não devem aparecer no grupo
+    ocultar = [
+        nome.strip().lower()
+        for nome in WHATSAPP_CONFIG.get("ocultar_do_grupo", [])
+    ]
+
+    passageiros_visiveis = [
+        r for r in resultados
+        if not any(oc in r.get("nome", "").lower() for oc in ocultar)
+    ]
+
+    for i, res in enumerate(passageiros_visiveis):
         nm = res.get("nome", "Aluno")
         primeiro_nome = nm.split()[0] + (" " + nm.split()[1] if len(nm.split()) > 1 else "")
         polt = res.get("poltrona", "N/A")
