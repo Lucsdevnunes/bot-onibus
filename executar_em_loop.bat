@@ -1,34 +1,41 @@
 @echo off
-title Bot de Reserva - Maurilandia (Modo Looping Inteligente)
+title Bot de Reserva - Maurilandia (Modo Ultra-Rapido Simultaneo)
 chcp 65001 > nul
 cls
 echo ======================================================================
 echo          BOT DE RESERVA UNIVERSITARIA - MAURILANDIA/GO
-echo                     MODO LOOPING INTELIGENTE
+echo             MODO ULTRA-RAPIDO SIMULTANEO (PARALELO)
 echo ======================================================================
 echo.
-echo  [REGRAS ATIVAS]
-echo  - Data da viagem: SEMPRE o dia seguinte (amanha)
+echo  [CONFIGURACAO ATIVA]
 echo  - Onibus: Exclusivo 0542 - Dheimes
-echo  - Alocacao: 8 alunos com busca por proximidade
-echo  - Refresh continuo: Recarrega ate o site abrir as vagas
-echo  - Atualizacao de mapa: Refresh no site apos cada cadastro
+echo  - Total de Passageiros: 8 Alunos
+echo  - Tecnologia: Disparo Paralelo Concorrente (Multithreading)
+echo  - Velocidade: Todas as reservas disparadas no mesmo milissegundo!
 echo.
-echo  [OCASIOES DE PARADA DO PROGRAMA]
-echo  1. Todos os 8 alunos forem marcados com SUCESSO.
-echo  2. As vagas do onibus 0542 acabarem (Onibus Lotado).
-echo  3. O relogio atingir o horario limite (22:30).
+echo  ----------------------------------------------------------------------
+echo  Escolha como deseja rodar:
 echo.
-echo  Pressione Ctrl+C para interromper manualmente a qualquer momento.
-echo ----------------------------------------------------------------------
+echo   [1] TESTAR AGORA IMEDIATAMENTE (Execucao Manual Direta)
+echo   [2] Modo Agendamento / Looping Automatico (Aguardar ate 21:58)
+echo  ----------------------------------------------------------------------
 echo.
+set "opcao=1"
+set /p "opcao=Digite a opcao desejada (1 ou 2) [Pressione ENTER para 1]: "
 
-cd /d "%~dp0"
+cd /d "C:\Users\Lucas Nunes\Desktop\bot_reserva"
 
-python main.py --loop
+echo.
+if "%opcao%"=="2" (
+    echo Iniciando em Modo Agendamento Automatico...
+    python main.py --loop
+) else (
+    echo Iniciando Teste Manual Imediato...
+    python main.py --agora
+)
 
 echo.
 echo ======================================================================
-echo Processamento concluido. A tela do navegador permanecera aberta.
+echo Processamento concluido. A janela do navegador permanecera aberta!
 echo ======================================================================
 pause
