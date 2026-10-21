@@ -94,8 +94,8 @@ PASSAGEIROS = [
     {
         "nome": "José Gabriel Bezerra da Silva",
         "curso": "Eletrotecnico",
-        "instituicao": "Senai",
-        "poltrona_preferencial": 18,
+        "instituicao": "SESI/SENAI",
+        "poltrona_preferencial": 11,
     },
 ]
 
