@@ -83,7 +83,7 @@ PASSAGEIROS = [
         "nome": "João Victor Mendes Queiroz",
         "curso": "Agronomia",
         "instituicao": "UNIRV",
-        "poltrona_preferencial": 15,
+        "poltrona_preferencial": 13,
     },
     {
         "nome": "José Gabriel Bezerra da Silva",
