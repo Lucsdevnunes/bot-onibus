@@ -68,12 +68,6 @@ PASSAGEIROS = [
         "poltrona_preferencial": 41,
     },
     {
-        "nome": "Bruna Alves Andrade",
-        "curso": "Psicologia",
-        "instituicao": "UNIRV",
-        "poltrona_preferencial": 42,
-    },
-    {
         "nome": "Gabriele Santos",
         "curso": "Enfermagem",
         "instituicao": "UNIRV",
