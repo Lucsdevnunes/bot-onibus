@@ -85,6 +85,12 @@ PASSAGEIROS = [
         "instituicao": "UNIRV",
         "poltrona_preferencial": 25,
     },
+    {
+        "nome": "João Victor Mendes Queiroz",
+        "curso": "Agronomia",
+        "instituicao": "UNIRV",
+        "poltrona_preferencial": 15,
+    },
 ]
 
 # ==============================================================================
