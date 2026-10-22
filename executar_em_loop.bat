@@ -9,7 +9,7 @@ echo ======================================================================
 echo.
 echo  [CONFIGURACAO ATIVA]
 echo  - Onibus: Exclusivo 0542 - Dheimes
-echo  - Total de Passageiros: 9 Alunos
+echo  - Total de Passageiros: 10 Alunos
 echo  - Tecnologia: Disparo Paralelo Concorrente (Multithreading)
 echo  - Velocidade: Todas as reservas disparadas no mesmo milissegundo!
 echo.
