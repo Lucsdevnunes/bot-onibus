@@ -7,7 +7,7 @@ echo                  ENVIANDO BOT PARA O GITHUB ACTIONS
 echo ======================================================================
 echo.
 
-cd /d "C:\Users\Lucas Nunes\Desktop\bot_reserva"
+cd /d "%~dp0"
 
 echo Enviando arquivos para o repositorio do GitHub...
 echo (Se abrir uma janela do navegador, clique em 'Sign in with browser' para autorizar)

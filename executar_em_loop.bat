@@ -9,7 +9,7 @@ echo ======================================================================
 echo.
 echo  [CONFIGURACAO ATIVA]
 echo  - Onibus: Exclusivo 0542 - Dheimes
-echo  - Total de Passageiros: 8 Alunos
+echo  - Total de Passageiros: 9 Alunos
 echo  - Tecnologia: Disparo Paralelo Concorrente (Multithreading)
 echo  - Velocidade: Todas as reservas disparadas no mesmo milissegundo!
 echo.
@@ -23,7 +23,7 @@ echo.
 set "opcao=1"
 set /p "opcao=Digite a opcao desejada (1 ou 2) [Pressione ENTER para 1]: "
 
-cd /d "C:\Users\Lucas Nunes\Desktop\bot_reserva"
+cd /d "%~dp0"
 
 echo.
 if "%opcao%"=="2" (
